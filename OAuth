@@ -1,1 +1,149 @@
 https://api2cart.com/api-technology/choosing-oauth-type-api/
+
+
+
+External Authentication
+
+https://community.boomi.com/s/article/gettingstartedwithexternalauthenticationforapimanagement
+
+Getting Started with External Authentication for API Management
+Oct 28, 2018•Knowledge Article
+Title
+Getting Started with External Authentication for API Management
+Content
+This article introduces the concepts and configuration related to using external identity providers to authenticate web services published with API Management.
+
+Overview
+Prerequisites
+Use Cases
+Conceptual Overview
+Tokens
+Applications
+Setup
+Network setup
+Service Provider (Boomi Atom/Molecule/Cloud)
+Authentication Broker (Boomi)
+Add New Authentication Source (Boomi)
+Configure Identity Provider (Okta)
+Configure an API to use External Authentication
+Testing
+Overview
+Using Boomi API Management, we can now secure Boomi web services using external identity providers. This expands on the authentication options available for securing our web services from the Atom Controlled authentication options, such as Basic Authentication, Client Certificate or the JAAS modules (API Management feature).
+
+Prerequisites
+This article assumes you are already familiar with Boomi and publishing web services. In particular:
+
+building, deploying, and securing web services in Boomi.
+securing web services on local runtimes.
+have some familiarity with using Boomi API Management features, such as using the the API Component to manage your APIs.
+Identity Management, including SAML and OpenID Connect protocols
+OAuth 2.0 authorization flows
+Use Cases
+Centralizing user management, SSO benefits - single set of credentials
+
+Conceptual Overview
+Before we setup our broker for External Authentication, let’s review some of the mechanics. We are looking to leverage an external identity provider to manage web service users instead of relying on Boomi user management (Atom Controlled). To do this, we will need to setup a trusted connection between our broker and Idp.
+
+Once we secure web services with External Authentication, we will be leveraging OAuth 2.0 authentication as our client facing authentication.
+
+Let’s break down the connections that occur between the entities for an initial login.
+
+
+
+There are four entities to consider:
+
+Broker - the Boomi Authentication Broker. This is a specialized Boomi runtime setup to only handle tokens and the communications with the Idp and the Service Provider.
+Service Provider - the Boomi runtime, the atom/molecule on which the web services are deployed and listening. For our purposes, this is a deployed Boomi web service running on an Atom or Molecule.
+Client - the consumer that is consuming our published API from the Service Provider. You can further breakdown the “client” as 1) the user, or resource owner 2) the user agent (browser), and 3) client application (a Boomi process)
+IdP - the Identity Provider. Thi is your SAML 2.0 or OpenID Connect v1.0 capable identity management system. E.g. Okta
+Tokens
+Token management is done by the Boomi Authentication Broker. Once a valid claim has been sent by the Idp, the broker will issue a token, with a 5 minute life. A refresh token is also issued to the client, with a life span of 30 minutes.
+
+If your application needs access when a user is not around, aka the web server flow, be sure to include a scope of “offline_access” during the initial call. This will issue a refresh token that does not expire.
+
+Your client application must be able to exchange refresh tokens once the access token expires. If you are using a Boomi process, with an HTTP connector for instance, this is done for you.
+
+Applications
+So far, we’ve only covered the authentication of the user, and not the authorization of what, or which API, the user is allowed to access. Enter Applications. From within Boomi API Management, we can create an Application, that provides the context for what APIs will be authorized access. Each application will be assigned an application key which is needed to invoke one or several APIs. Applications provide additional capabilities to set contracts, including quotas, rate limits, and message size limits for a given API.
+
+Along with the Bearer token, issued by the Broker, the client application will need to submit the X-API-KEY header with the application key.
+
+Setup
+Network setup
+Required Connections:
+
+Client to Broker (Auth Request on the Broker Authentication URL - on port configured in Broker Settings, defaults to 8080)
+Broker to IDP (Idp request, on the URLs configured for that Identity Provider on the Authentication Source Identity Provider tab)
+Client to IDP (Idp Login using the Idp URL - on the URLs configured for that Identity Provider on the Authentication Source Identity Provider tab)
+Client to SP (Service Call on the URL and port configured in Atom's Shared Web Server)
+SP to Broker (obtain Broker keys for Auth Source, on the internal URL configured in Broker Settings)
+Service Provider (Boomi Atom/Molecule/Cloud)
+You must have a process deployed to your runtime, that uses the Shared Web Server Component in the start shape.
+The process must be managed by an API Component, which also must be deployed to the Atom
+The Atom settings on the Shared Web Server settings must be set to External Authentication.
+Authentication Broker (Boomi)
+Once we’ve identified where to setup and install our broker, we’re ready to go!
+
+Download and run the Authentication Broker Installer: Authentication Broker setup.
+Setup SSL for broker server (Most Idp systems will require SSL). For ease of use, its recommended getting a CA signed certificate to ensure trust.
+Configure the Broker internal and external URL; including the port; and SSL certificate on the Broker Settings.
+Verify you can hit the broker url from the SP (Boomi runtime), as well as by your external and/or internal Client(s).
+Now that the broker is setup, let’s configure an Authentication Source, which will define the connection to your identity management system.
+
+Add New Authentication Source (Boomi)
+In Boomi API Management, on the Authentication tab, add a new Authentication Source
+Select Provider Type: SAML v2.0.
+Configure a temporary url for Single Sign On Service URL (we will update later).
+Save Authentication Source and attach to newly installed broker.
+Copy redirect URI from Boomi, we will need this in the Idp setup.
+Note this will not appear until saved and attached to a Broker.
+Configure Identity Provider (Okta)
+For purposes of this demo, we are going to use Okta as the Idp using SAML v.0. Your actual setup steps will vary depending on your Identity Management System and provider type.
+
+Login to Okta as an admin and complete setup a new application:
+
+Configure a new SAML application
+Applications -> Add Application
+Create New App, SAML 2.0
+Name your App (e.g. “Boomi Web Services”)
+Do Not display application icon to users OR Okta Mobile App
+Configure redirect URI from step 3 above as Single Sign ON URL and Audience URI
+Name ID format EmailAddress
+NOTE: Be sure to check this an internal app and not to publish in Okta marketplace
+Provision user access to the app
+On SSO page, view setup instructions, copy Identity Provider Single Sign-On URL and use this to update the dummy value populated in Boomi (from step 1 above).
+Note: Boomi provides a metadata service that can be used to import in the Broker settings. To use, take the Redirect URL and replace "/broker/{idp alias}/endpoint" with "protocol/saml/descriptor" to get a url that will give you the metadata.
+
+Now that we have the authentication setup, lets deploy an API to leverage it.
+
+Configure an API to use External Authentication
+In AtomSphere, you should already have a web service deployed to your runtime. On the Shared Web Server settings, change the authentication type to External Provider.
+
+We should already have an API Component deployed to manage our deployed web service. Now we need to create a new deployment to leverage the new authentication scheme.
+
+In API Management, on the APIs page, go to Manage for the API you want to test with.
+Create a new deployment
+Change the authentication to External Provider
+Select your newly configured Authentication Source
+Note the Authentication URL, Token URL, and Client ID
+On the Applications page, create a new application key and authorize the newly deployed API (use a default unlimited contract for now).
+Note the application key
+Testing
+Time to test!
+
+From a client application like Postman try hitting your published API endpoint. It should return a 401. No token yet!
+We need to use OAuth 2.0 to authorize Postman to connect. Add OAuth 2.0 authentication.
+Retrieve the connection details from Boomi APIs screen.
+Click on APIs tab, click Manage for API you are calling
+Select the Authentication for the deployment you are testing (Okta Authentication Source). Note the Authentication URL the Token URL and the Client ID (all provided by the Auth Broker)
+Populated these in Postman
+there is no client secret
+Back in Postman, request a token.
+This should bring you to a Broker Login page, click on the button for the Okta Authentication Source
+Login to Okta, using a valid Okta user’s credentials
+Auth Broker may ask for some info for you (for managing the token)
+Token generation should be successful – token retrieved!
+Try your original request again in Postman, being sure to use the newly acquired token.
+Add a header: X-API-KEY, with the value of your api key from the Applications page in Boomi.
+Submit Request
+If everything has been setup correctly, you should now be invoking your Boomi web service process, secured using external authentication.
